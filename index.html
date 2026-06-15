@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Hores">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon.png">
+<title>Registre d'Hores</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #F7F6F3;
+    --surface: #FFFFFF;
+    --border: #E2E0DA;
+    --text: #1A1A1A;
+    --muted: #888880;
+    --accent: #1A1A1A;
+    --green: #2D6A4F;
+    --red: #C0392B;
+    --row-hover: #F0EEE9;
+    --weekend: #FAFAF8;
+    --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+    --font-mono: 'Courier New', Courier, monospace;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 24px 16px 40px;
+    /* Safe area for iPhone notch */
+    padding-top: max(24px, env(safe-area-inset-top));
+    padding-bottom: max(40px, env(safe-area-inset-bottom));
+  }
+
+  .container { max-width: 860px; margin: 0 auto; }
+
+  .header {
+    display: flex; align-items: center;
+    justify-content: space-between;
+    margin-bottom: 18px; flex-wrap: wrap; gap: 10px;
+  }
+
+  .header-left h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.3px; }
+  .header-left p  { font-size: 11px; color: var(--muted); margin-top: 2px; font-family: var(--font-mono); }
+
+  .month-nav {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 5px 10px;
+  }
+  .month-nav button {
+    background: none; border: none; cursor: pointer;
+    font-size: 18px; color: var(--text); padding: 4px 8px;
+    border-radius: 4px; transition: background 0.12s; line-height: 1;
+    /* Bigger tap target on mobile */
+    min-width: 36px; min-height: 36px;
+  }
+  .month-nav button:active { background: var(--border); }
+
+  #month-label {
+    font-family: var(--font-mono); font-size: 13px; font-weight: 600;
+    min-width: 124px; text-align: center;
+  }
+
+  /* Summary */
+  .summary { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+  .stat {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 11px 16px; flex: 1; min-width: 100px;
+  }
+  .stat-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.7px; color: var(--muted); font-family: var(--font-mono); }
+  .stat-value { font-size: 22px; font-weight: 700; font-family: var(--font-mono); margin-top: 2px; }
+  .stat-value.highlight { color: var(--green); }
+
+  /* Table */
+  .table-wrap {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; overflow: hidden;
+  }
+  table { width: 100%; border-collapse: collapse; }
+  thead th {
+    background: var(--accent); color: white;
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px;
+    padding: 9px 10px; text-align: left;
+    font-family: var(--font-mono); font-weight: 600;
+  }
+  thead th:last-child { text-align: right; }
+
+  tbody tr { border-bottom: 1px solid var(--border); }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr.weekend { background: var(--weekend); }
+
+  .col-dia { padding: 6px 10px; width: 100px; }
+  .day-name { font-size: 12px; font-weight: 600; }
+  .day-num  { font-size: 11px; color: var(--muted); font-family: var(--font-mono); }
+  .weekend .day-name { color: var(--muted); font-weight: 400; }
+
+  .col-time { padding: 4px 5px; width: 120px; }
+
+  .time-input-wrap {
+    display: flex; align-items: center; gap: 2px;
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 6px; padding: 6px 6px;
+    transition: border-color 0.12s;
+  }
+  .time-input-wrap:focus-within { border-color: var(--accent); background: white; }
+
+  .time-input-wrap input {
+    background: none; border: none; outline: none;
+    font-family: var(--font-mono); font-size: 16px;
+    width: 28px; text-align: center; color: var(--text);
+    -moz-appearance: textfield;
+    /* Prevent iOS zoom on focus (needs font-size >= 16px) */
+  }
+  .time-input-wrap input::-webkit-outer-spin-button,
+  .time-input-wrap input::-webkit-inner-spin-button { -webkit-appearance: none; }
+
+  .time-sep { font-family: var(--font-mono); font-size: 15px; color: var(--muted); user-select: none; }
+
+  .col-total {
+    padding: 6px 10px; text-align: right;
+    font-family: var(--font-mono); font-size: 13px; font-weight: 600; width: 80px;
+  }
+  .hours-ok   { color: var(--green); }
+  .hours-low  { color: var(--red); }
+  .hours-none { color: var(--border); }
+
+  /* Footer */
+  .footer {
+    margin-top: 14px; display: flex;
+    justify-content: space-between; align-items: center;
+    flex-wrap: wrap; gap: 8px;
+  }
+  .footer-left { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  .btn {
+    background: none; border: 1px solid var(--border);
+    border-radius: 8px; padding: 9px 14px;
+    font-family: var(--font-sans); font-size: 13px;
+    cursor: pointer; color: var(--text); transition: all 0.12s;
+    white-space: nowrap; min-height: 40px;
+  }
+  .btn:active { background: var(--border); }
+  .btn-primary { background: var(--accent); color: white; border-color: var(--accent); }
+  .btn-primary:active { background: #333; }
+  .btn-danger { color: var(--red); border-color: #f0c0bb; }
+  .btn-danger:active { background: #fff0ee; }
+
+  /* Toast */
+  .toast {
+    position: fixed; bottom: 30px; left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: var(--accent); color: white;
+    padding: 10px 20px; border-radius: 10px;
+    font-size: 14px; transition: transform 0.22s ease;
+    pointer-events: none; z-index: 999;
+    bottom: max(30px, env(safe-area-inset-bottom));
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+
+  /* Hide note column on small screens */
+  @media (max-width: 540px) {
+    .col-note, thead th:nth-child(4) { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div class="header-left">
+      <h1>Registre d'Hores</h1>
+      <p id="today-label"></p>
+    </div>
+    <div class="month-nav">
+      <button onclick="changeMonth(-1)">&#8592;</button>
+      <span id="month-label">—</span>
+      <button onclick="changeMonth(1)">&#8594;</button>
+    </div>
+  </div>
+
+  <div class="summary">
+    <div class="stat">
+      <div class="stat-label">Dies fitxats</div>
+      <div class="stat-value" id="stat-days">0</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Total hores</div>
+      <div class="stat-value highlight" id="stat-hours">0h 00m</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Mitjana/dia</div>
+      <div class="stat-value" id="stat-avg">—</div>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Dia</th>
+          <th>Entrada</th>
+          <th>Sortida</th>
+          <th class="col-note">Nota</th>
+          <th>Total</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+
+  <div class="footer">
+    <div class="footer-left">
+      <button class="btn" onclick="exportJSON()">⬇ Exportar</button>
+      <button class="btn" onclick="document.getElementById('import-file').click()">⬆ Importar</button>
+      <input type="file" id="import-file" accept=".json" style="display:none" onchange="importJSON(event)">
+      <button class="btn btn-danger" onclick="clearMonth()">Esborrar mes</button>
+    </div>
+    <button class="btn btn-primary" onclick="saveData()">Desar ✓</button>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  }
+
+  const MONTHS_CA = ['Gener','Febrer','Març','Abril','Maig','Juny','Juliol','Agost','Setembre','Octubre','Novembre','Desembre'];
+  const DAYS_CA   = ['Diumenge','Dilluns','Dimarts','Dimecres','Dijous','Divendres','Dissabte'];
+
+  let current   = new Date();
+  let viewYear  = current.getFullYear();
+  let viewMonth = current.getMonth();
+
+  function storageKey(y, m) {
+    return `fichaje_${y}_${String(m+1).padStart(2,'0')}`;
+  }
+
+  function loadData() {
+    try { return JSON.parse(localStorage.getItem(storageKey(viewYear, viewMonth)) || '{}'); }
+    catch { return {}; }
+  }
+
+  function persistData(data) {
+    try { localStorage.setItem(storageKey(viewYear, viewMonth), JSON.stringify(data)); } catch {}
+  }
+
+  function collectCurrentData() {
+    const data = {};
+    document.querySelectorAll('tr[data-day]').forEach(row => {
+      const day    = row.dataset.day;
+      const inputs = row.querySelectorAll('input[type=number]');
+      const note   = row.querySelector('.note-input');
+      const eH = inputs[0].value, eM = inputs[1].value;
+      const sH = inputs[2].value, sM = inputs[3].value;
+      if (eH !== '' || sH !== '') {
+        data[day] = { eH, eM: eM||'00', sH, sM: sM||'00', note: note?.value||'' };
+      } else if (note?.value) {
+        data[day] = { eH:'', eM:'00', sH:'', sM:'00', note: note.value };
+      }
+    });
+    return data;
+  }
+
+  function saveData() {
+    persistData(collectCurrentData());
+    showToast('Desat ✓');
+  }
+
+  function autoSaveSingle(tr) {
+    const data   = loadData();
+    const day    = tr.dataset.day;
+    const inputs = tr.querySelectorAll('input[type=number]');
+    const note   = tr.querySelector('.note-input');
+    const eH = inputs[0].value, eM = inputs[1].value;
+    const sH = inputs[2].value, sM = inputs[3].value;
+    if (eH !== '' || sH !== '' || note?.value) {
+      data[day] = { eH, eM: eM||'00', sH, sM: sM||'00', note: note?.value||'' };
+    } else {
+      delete data[day];
+    }
+    persistData(data);
+  }
+
+  function clearMonth() {
+    if (!confirm('Esborrar tots els fitxatges d\'aquest mes?')) return;
+    try { localStorage.removeItem(storageKey(viewYear, viewMonth)); } catch {}
+    renderMonth();
+    showToast('Mes esborrat');
+  }
+
+  function exportJSON() {
+    saveData();
+    const allData = {};
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith('fichaje_')) {
+          allData[k] = JSON.parse(localStorage.getItem(k));
+        }
+      }
+    } catch {}
+    const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = `hores_${viewYear}.json`; a.click();
+    URL.revokeObjectURL(url);
+    showToast('Exportat ✓');
+  }
+
+  function importJSON(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const allData = JSON.parse(e.target.result);
+        Object.entries(allData).forEach(([k, v]) => {
+          if (k.startsWith('fichaje_')) localStorage.setItem(k, JSON.stringify(v));
+        });
+        renderMonth();
+        showToast('Importat ✓');
+      } catch { showToast('Error: fitxer no vàlid'); }
+    };
+    reader.readAsText(file);
+    event.target.value = '';
+  }
+
+  function changeMonth(delta) {
+    saveData();
+    viewMonth += delta;
+    if (viewMonth > 11) { viewMonth = 0; viewYear++; }
+    if (viewMonth < 0)  { viewMonth = 11; viewYear--; }
+    renderMonth();
+  }
+
+  function daysInMonth(y, m) { return new Date(y, m + 1, 0).getDate(); }
+
+  function parseTime(h, m) {
+    const hv = parseInt(h), mv = parseInt(m || 0);
+    if (isNaN(hv) || h === '') return null;
+    return hv * 60 + (isNaN(mv) ? 0 : mv);
+  }
+
+  function fmtDuration(mins) {
+    if (mins === null || mins < 0) return '—';
+    return `${Math.floor(mins/60)}h ${String(mins%60).padStart(2,'0')}m`;
+  }
+
+  function renderMonth() {
+    const data  = loadData();
+    const days  = daysInMonth(viewYear, viewMonth);
+    const today = new Date();
+
+    document.getElementById('month-label').textContent =
+      `${MONTHS_CA[viewMonth]} ${viewYear}`;
+    document.getElementById('today-label').textContent =
+      `Avui: ${DAYS_CA[today.getDay()]}, ${today.getDate()} de ${MONTHS_CA[today.getMonth()]} ${today.getFullYear()}`;
+
+    const tbody = document.getElementById('tbody');
+    tbody.innerHTML = '';
+
+    for (let d = 1; d <= days; d++) {
+      const date      = new Date(viewYear, viewMonth, d);
+      const dow       = date.getDay();
+      const isWeekend = (dow === 0 || dow === 6);
+      const key       = String(d);
+      const saved     = data[key] || {};
+
+      const eH = saved.eH ?? '', eM = saved.eM ?? '00';
+      const sH = saved.sH ?? '', sM = saved.sM ?? '00';
+      const note = saved.note ?? '';
+
+      const entryMins = parseTime(eH, eM);
+      const exitMins  = (parseInt(sH) === 24) ? 1440 : parseTime(sH, sM);
+      let diff = null;
+      if (entryMins !== null && exitMins !== null && exitMins > entryMins) {
+        diff = exitMins - entryMins;
+      }
+
+      const isToday   = today.getFullYear()===viewYear && today.getMonth()===viewMonth && today.getDate()===d;
+      const todayMark = isToday ? ' ◆' : '';
+      const totalCell = diff !== null
+        ? `<span class="${diff >= 480 ? 'hours-ok' : 'hours-low'}">${fmtDuration(diff)}</span>`
+        : (eH||sH ? '<span class="hours-low">—</span>' : '<span class="hours-none">—</span>');
+
+      const tr = document.createElement('tr');
+      tr.dataset.day = key;
+      if (isWeekend) tr.classList.add('weekend');
+
+      tr.innerHTML = `
+        <td class="col-dia">
+          <div class="day-name">${DAYS_CA[dow]}${todayMark}</div>
+          <div class="day-num">${String(d).padStart(2,'0')}</div>
+        </td>
+        <td class="col-time">
+          <div class="time-input-wrap">
+            ${ni('eh',eH,'HH',0,23)} <span class="time-sep">:</span> ${ni('em',eM,'MM',0,59)}
+          </div>
+        </td>
+        <td class="col-time">
+          <div class="time-input-wrap">
+            ${ni('sh',sH,'HH',0,24)} <span class="time-sep">:</span> ${ni('sm',sM,'MM',0,59)}
+          </div>
+        </td>
+        <td class="col-note">
+          <input class="note-input" type="text" placeholder="Nota..." value="${escHtml(note)}" maxlength="60"
+            style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 7px;font-size:13px;width:100%;outline:none;">
+        </td>
+        <td class="col-total">${totalCell}</td>
+      `;
+
+      tr.querySelectorAll('input[type=number]').forEach(inp => {
+        inp.addEventListener('change', () => { clamp(inp); recalcRow(tr); recalcSummary(); autoSaveSingle(tr); });
+        inp.addEventListener('input',  () => { clamp(inp); recalcRow(tr); recalcSummary(); });
+      });
+      tr.querySelector('.note-input')?.addEventListener('blur', () => autoSaveSingle(tr));
+
+      tbody.appendChild(tr);
+    }
+    recalcSummary();
+  }
+
+  function ni(name, val, ph, min, max) {
+    return `<input type="number" name="${name}" value="${val}" placeholder="${ph}" min="${min}" max="${max}" inputmode="numeric">`;
+  }
+
+  function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function clamp(inp) {
+    let v = parseInt(inp.value);
+    if (isNaN(v)) return;
+    inp.value = Math.max(parseInt(inp.min), Math.min(parseInt(inp.max), v));
+  }
+
+  function recalcRow(tr) {
+    const inputs = tr.querySelectorAll('input[type=number]');
+    const eH = inputs[0].value, eM = inputs[1].value;
+    const sH = inputs[2].value, sM = inputs[3].value;
+    if (parseInt(sH) === 24) inputs[3].value = '00';
+    const entryMins = parseTime(eH, eM);
+    const exitMins  = (parseInt(sH) === 24) ? 1440 : parseTime(sH, sM);
+    let diff = null;
+    if (entryMins !== null && exitMins !== null && exitMins > entryMins) diff = exitMins - entryMins;
+    const cell = tr.querySelector('.col-total');
+    if (diff !== null) {
+      cell.innerHTML = `<span class="${diff >= 480 ? 'hours-ok' : 'hours-low'}">${fmtDuration(diff)}</span>`;
+    } else if (eH || sH) {
+      cell.innerHTML = '<span class="hours-low">—</span>';
+    } else {
+      cell.innerHTML = '<span class="hours-none">—</span>';
+    }
+  }
+
+  function recalcSummary() {
+    let totalMins = 0, workedDays = 0;
+    document.querySelectorAll('tr[data-day]').forEach(tr => {
+      const inputs    = tr.querySelectorAll('input[type=number]');
+      const entryMins = parseTime(inputs[0].value, inputs[1].value);
+      const exitMins  = (parseInt(inputs[2].value) === 24) ? 1440 : parseTime(inputs[2].value, inputs[3].value);
+      if (entryMins !== null && exitMins !== null && exitMins > entryMins) {
+        totalMins += (exitMins - entryMins); workedDays++;
+      }
+    });
+    document.getElementById('stat-days').textContent  = workedDays;
+    document.getElementById('stat-hours').textContent = fmtDuration(totalMins);
+    document.getElementById('stat-avg').textContent   = workedDays > 0 ? fmtDuration(Math.round(totalMins/workedDays)) : '—';
+  }
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg; t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2000);
+  }
+
+  renderMonth();
+</script>
+</body>
+</html>
